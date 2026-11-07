@@ -1,6 +1,6 @@
 # Design review — solo developer, multiple AI models, GitHub-only task management
 
-**Research checkpoint:** 7 November 2026. This is a reusable recommendation, not a modification to any of the user's existing repositories. Recheck platform features and plan limits on adoption.
+**Research checkpoint:** 7 November 2026. **Owner architecture amendment:** 8 November 2026 — no GitHub-triggered AI dispatch; human-invoked or externally scheduled agent sessions. This is a reusable recommendation, not a modification to any of the user's existing repositories. Recheck platform features and plan limits on adoption.
 
 ## Existing Daemon Reborn governance examined
 
@@ -30,8 +30,8 @@ The new template retains **the rigor** while replacing `ChatGPT` → `chief`, `C
 
 ## Important limitations
 
-1. **No full ACID** across GitHub Issues, Projects, PRs and Discussions. The template implements a **recoverable state transition protocol**. A true serializable dispatcher needs an external single-writer/lock or a transactional database; GitHub comments/labels alone cannot provide strong isolation.
-2. **No automatic AI dispatch** from label change alone. A runner must poll or receive webhook events and have the right Project/Issues permissions. Configure idempotency, race resolution and rate limits.
+1. **No full ACID** across GitHub Issues, Projects, PRs and Discussions. The template implements a **recoverable state transition protocol**. True cross-agent mutual exclusion would need an external lock/coordinator or a transactional database; this template uses advisory claims and fail-closed contention checks rather than claiming strong isolation.
+2. **No automatic AI dispatch** from label changes or any GitHub event. The human invokes or schedules Codex, OpenCode, ChatGPT Work or a custom orchestrator independently. Each session queries current GitHub Projects/Issues, validates role and claims, handles idempotency and bounded API retries, then writes verifiable results back. No model runner URL/token or GitHub-triggered dispatcher is required.
 3. **No automatic independent approval** merely by using a superior AI. If the same GitHub account posts both Worker and Chief comments, the application cannot claim that GitHub's native independent review requirement is satisfied.
 4. **No faithful status guarantee from the built-in Issue closed→Done workflow** without extra verification. Closing an issue is only a projection of accepted delivery; action workflows may need guards.
 5. **Discussion content can be stale or unsafe to publish.** Always distill decisions back to issue/ADR scope and verify repository/Project visibility.
@@ -39,4 +39,8 @@ The new template retains **the rigor** while replacing `ChatGPT` → `chief`, `C
 
 ## Revisit after a pilot
 
-Run one small issue through Chief specification, Worker implementation, worker→chief escalation, Chief review, a simulated human gate, and a protected merge. Measure token/context load, duplicated API calls, queue lag, dispatch failures, conflict frequency and review findings. Refine only from observed data, not from theoretical simplicity.
+Run one small issue through Chief specification, Worker implementation, worker→chief escalation, Chief review, a simulated human gate, and a protected merge. Measure token/context load, duplicated API calls, scheduled-session queue lag, contention/recovery failures, conflict frequency and review findings. Refine only from observed data, not from theoretical simplicity.
+
+## Owner-approved execution architecture amendment (8 November 2026)
+
+Draft PR #4 (GitHub-triggered agent dispatcher) was superseded and closed unmerged. An existing read-only GitHub Actions audit is retained. **The owner chooses when to launch agents** using native scheduling/manual invocation in a chosen AI tool. Every agent is provider-neutral: it reads the canonical GitHub Project and Issue, claims by a best-effort comment/lease, operates within its role, and updates the Issue/Project on completion or escalation. The labels `chief`, `worker` and `human` are routing metadata, not executable triggers. GitHub credentials must not be given to an unnecessary always-on dispatch service.

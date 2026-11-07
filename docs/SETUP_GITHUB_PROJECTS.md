@@ -8,7 +8,7 @@
 - Use account/repo/Project visibility appropriate for the research and assets. A public repository and a public Project may expose issue content, attachments, comments, Discussions and PR logs; treat them separately.
 - Install GitHub CLI (`gh`) and authenticate interactively. GitHub Projects has the `project` OAuth scope; `repo` may be needed for private repository operations. Grant *least privilege* appropriate to the actual tasks. Example: `gh auth refresh -s project,repo` (avoid copying tokens into scripts or chat).
 - Check authorization: `gh auth status`, `gh api user --jq .login`, `gh project list --owner [OWNER]`.
-- The `gh` command itself does not schedule an AI agent. For unattended routing, integrate a separate authorized GitHub App/dispatcher with notifications or polling.
+- Neither GitHub Projects labels nor the `gh` CLI trigger AI agents. The human owner invokes or schedules Chief/Worker directly within Codex, OpenCode, ChatGPT Work, a custom orchestrator, or another chosen runtime. Do not install an agent-dispatching service, provider endpoint or runner credentials for this template.
 
 ## 2. Create a live Project (CLI examples)
 
@@ -47,21 +47,17 @@ gh project item-list PROJECT_NUMBER --owner OWNER --limit 1000 --format json
 
 Do not use untracked Project **draft** items as implementation tasks. Convert drafts to repository issues before Worker dispatch. For cross-repository dependencies, use native GitHub blockedBy/blocking relations when available, and link them in issue body as readable context.
 
-## 4. Multi-agent dispatch, review and human gates
+## 4. Agent-initiated scheduling, review and human gates
 
-Implement **one serialized dispatch coordinator** per Project, not multiple independent workers racing on label events. The agent runner should:
+Chief and Worker are **roles** fulfilled by independently invoked AI sessions, not named hosted bots. The owner can start any supported tool manually or schedule its check using that tool's own scheduler. The session must read `AGENTS.md`, query the live Project (all pages), and select eligible Project-linked issues by role and Status.
 
-1. Query Project items + current Status + labels, then assign by `chief` or `worker` routing; do not dispatch `human` issues.
-2. Require Worker `Ready` + `worker` + certified DoR before starting; require current run/lease read-back on retries.
-3. Record transition comment with a unique idempotency marker, replace the issue's role labels with one full-set update, update Project Status, read back all values, and block/reconcile if inconsistent. The comment/Project update cannot be made atomically with the issue labels.
-4. Route Worker implementation completion back to Chief for independent assessment; Chief handles human-only blockers and final Done closeout.
-5. Run a periodic **read-only governance audit** of every issue in the Project for: missing Project item, invalid route, impossible `human` combination, dependency cycles, stale in-progress leases, review without PR, Done without proof, closed/open vs Project Status drift.
+- **Single-issue:** specify exactly one GitHub issue and role. Verify live labels, Project membership, dependencies and active claim before work.
+- **Queue:** specify a role and issue-count limit. Process eligible issues by Priority and stable tie-break; never execute two claimed/conflicting issues at once.
+- **Safe claim:** inspect all comments for active/ambiguous claims, comment `START` with a unique run ID and UTC expiry, then read back and re-check competing claims **before** changing Project Status or doing work. On a conflict, stop without relabeling or changing Status. After an evidenced handoff or stop, write and verify the matching `<!-- claim-end:ISSUE-N:RUN-ID -->` `CLAIM RELEASED` comment. Missing release or expired claims require Chief reconciliation; labels/comments are not distributed locks.
+- **Handoffs:** record complete decisions/proofs on the issue, update `chief` XOR `worker` and its Project Status, and read back all mutations. `human` only coexists with Chief, who clears it after the human-only gate is verified.
+- **Governance CI:** keep read-only audit of labels, Project membership and statuses. Do not let GitHub Actions automatically dispatch AI sessions.
 
-Use a GitHub App or token with actual Projects v2 read/write scope for automation; the repository-scoped `GITHUB_TOKEN` does not necessarily have Projects v2 access. Use explicit `permissions` for GitHub Actions, never assume full access by default.
-
-Optional recurring audit: set the GitHub Actions repository variable `GH_PROJECT_NODE_ID` and a dedicated least-privilege secret `GH_PROJECTS_READ_TOKEN`, then rename `.github/workflows/governance-audit.yml.example` to `.github/workflows/governance-audit.yml`. Its read-only scheduled/manual job fails on detected route/status drift and uploads an audit report. Verify secret scope and retention settings before enabling.
-
-**ACID-inspired ≠ ACID database guarantees:** no GitHub API call can atomically change Issue labels, a comment and Project fields together. Durable comments + idempotent retry + read-back + limited single-writer scheduling approximate a recoverable saga. Use `scripts/validate_governance.py` as a read-only, partial invariant check; it does not grant locks or enforce a human approval.
+There are **no** `AGENT_RUNNER_URL`, `AGENT_RUNNER_TOKEN`, provider/model deployment, or agent-triggering workflows required for this approach. Token credentials used for optional read-only auditing remain separate from the agents' own authorized GitHub access.
 
 ## 5. Git and PR controls
 

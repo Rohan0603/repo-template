@@ -4,7 +4,9 @@
 
 Copy the single root `AGENTS.md` (full policy and standard auto-discovery filename) to each new repository. Read `docs/SETUP_GITHUB_PROJECTS.md`, create your Project and role labels, then install the optional issue and PR templates.
 
-The default routing is **chief** (research/architecture/decisions/review) or **worker** (implementation) as mutually exclusive labels; **human** is a Chief-managed extra flag for human-only gates. Every actionable issue must live in the correct Project and have one primary role. Don't assume the labels launch agents; a separate dispatcher or manual agent invocation is required.
+The human owner **manually invokes or schedules** AI sessions in Codex, OpenCode, ChatGPT Work, custom orchestrators, or other tools. Each session queries the live GitHub Project and issues, applies advisory issue claims, performs the designated role and writes evidence/handoffs back. **GitHub never launches AI agents.**
+
+The default routing is **chief** (research/architecture/decisions/review) or **worker** (implementation) as mutually exclusive labels; **human** is a Chief-managed extra flag for human-only gates. Every actionable issue must live in the correct Project and have one primary role. Labels never launch agents, and no central dispatcher or external runner service is needed. A scheduled agent session independently discovers its eligible issues through the GitHub Project.
 
 ## Files
 
@@ -17,7 +19,7 @@ The default routing is **chief** (research/architecture/decisions/review) or **w
 - `scripts/validate_governance.py` — optional **read-only** role/Project/status audit; does not grant or enforce permissions.
 - `.github/workflows/governance-audit.yml.example` — optional daily/manual read-only Project audit; rename only after setting up secrets/variables.
 
-No existing GitHub or Linear repository is modified by this starter kit. Github Project creation and CLI authorization are separate actions to perform for each **new** repository. Never paste access tokens in chat or commit them to this package.
+The starter kit does not introduce GitHub-triggered model execution. The scheduled governance audit remains read-only. Github Project creation and CLI authorization are separate actions to perform for each **new** repository. Never paste access tokens in chat or commit them to this package.
 
 ## Automated governance checks and repository bootstrap
 
