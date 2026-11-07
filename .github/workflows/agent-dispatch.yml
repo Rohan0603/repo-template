@@ -1,0 +1,63 @@
+name: Agent Dispatch
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Repository issue number to reconcile and dispatch
+        required: true
+        type: string
+      provider:
+        description: Explicit provider adapter name configured by the owner
+        required: true
+        type: string
+      model:
+        description: Explicit model identifier configured by the owner
+        required: true
+        type: string
+      execute:
+        description: Call the configured runner after read-back
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+
+# One coordinator may write a given issue at a time. Queued runs are retained.
+concurrency:
+  group: agent-dispatch-issue-${{ inputs.issue_number }}
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GH_PROJECTS_WRITE_TOKEN }}
+      GH_PROJECT_NODE_ID: ${{ vars.GH_PROJECT_NODE_ID }}
+      AGENT_RUNNER_URL: ${{ secrets.AGENT_RUNNER_URL }}
+      AGENT_RUNNER_TOKEN: ${{ secrets.AGENT_RUNNER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Require explicit Projects write credential
+        shell: bash
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Configure GH_PROJECTS_WRITE_TOKEN with Project write access; the read-only audit token is not reused."
+            exit 2
+          fi
+          if [ -z "$GH_PROJECT_NODE_ID" ]; then
+            echo "::error::Missing GH_PROJECT_NODE_ID repository variable"
+            exit 2
+          fi
+      - name: Reconcile and dispatch
+        run: |
+          args=(--repo "$GITHUB_REPOSITORY" --issue-number "${{ inputs.issue_number }}" \
+            --project-id "$GH_PROJECT_NODE_ID" --provider "${{ inputs.provider }}" \
+            --model "${{ inputs.model }}" --run-id "$GITHUB_RUN_ID")
+          if [ "${{ inputs.execute }}" = "true" ]; then args+=(--execute); fi
+          python scripts/dispatch_agent.py "${args[@]}"

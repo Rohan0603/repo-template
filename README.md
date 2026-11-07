@@ -15,6 +15,8 @@ The default routing is **chief** (research/architecture/decisions/review) or **w
 - `docs/RESEARCH_DECISIONS.md` — sources, rationale and limitations.
 - `docs/WORKFLOW_EXAMPLES.md` — complete Chief/Worker/Human transition examples.
 - `scripts/validate_governance.py` — optional **read-only** role/Project/status audit; does not grant or enforce permissions.
+- `scripts/dispatch_agent.py` — fail-closed single-writer handoff coordinator; it changes labels/Project Status with read-back but never infers a provider, model, credential, or approval.
+- `.github/workflows/agent-dispatch.yml` — manual, per-issue serialized dispatch entry point. It requires an explicit Projects-write secret and explicit provider/model inputs.
 - `.github/workflows/governance-audit.yml.example` — optional daily/manual read-only Project audit; rename only after setting up secrets/variables.
 
 No existing GitHub or Linear repository is modified by this starter kit. Github Project creation and CLI authorization are separate actions to perform for each **new** repository. Never paste access tokens in chat or commit them to this package.
@@ -26,6 +28,8 @@ The template includes an **active** GitHub Actions workflow in `.github/workflow
 - Pull requests and pushes to `main` run the offline governance-validator unit tests with no secrets.
 - Scheduled/manual Projects audits run **only** when the repository variable `GH_PROJECT_NODE_ID` is set. They also require the repository secret `GH_PROJECTS_READ_TOKEN` with **read-only** access to the target Project. A missing secret fails the configured audit; it never silently reports a pass.
 - The workflow checks route/status consistency only; it does not automatically dispatch agents or enforce branch protection.
+
+The dispatcher is deliberately separate from the audit. Configure `GH_PROJECTS_WRITE_TOKEN` only when an owner-approved runner needs Project/Issue writes; do not reuse the read-only `GH_PROJECTS_READ_TOKEN`. Configure `AGENT_RUNNER_URL` and `AGENT_RUNNER_TOKEN` only for a real, owner-controlled provider adapter. A manual run with `execute=false`, or without the runner pair, performs the coordinator read-back and reports `NOT_DISPATCHED`; it does not fabricate an agent run. The runner must record its own START, evidence, escalation, review and closeout comments.
 
 On Windows after creating a new repository from this template:
 
