@@ -5,6 +5,32 @@
 
 These are **examples only**. Replace numbers, SHA values, and links. Never assert that a test ran or approval happened because the example contains those words.
 
+## Session claim and release (advisory, not a lock)
+
+Each separately started session checks **all** issue comments and live Project state before work. These example timestamps and IDs are illustrative, not proof of a real agent run.
+
+```text
+<!-- claim:ISSUE-142:codex-20261108T090000Z-1 -->
+START — 2026-11-08T09:00:00Z
+Role: worker; tool: Codex; run_id: codex-20261108T090000Z-1
+Expires: 2026-11-08T10:00:00Z
+Baseline: <actual-sha>; intended work: <approved scope>.
+```
+
+Read the START back, re-fetch claims and Project Status, and **stop without changing Status** if a different active or ambiguous claim appears. Even two sessions using this sequence do not have an atomic lock.
+
+At actual completion, escalation or deliberate stop, publish and verify the evidence/handoff **before** publishing:
+
+```text
+<!-- claim-end:ISSUE-142:codex-20261108T090000Z-1 -->
+CLAIM RELEASED — 2026-11-08T09:40:00Z
+Run ID: codex-20261108T090000Z-1
+Outcome: <verified handoff / blocked / closeout URL>
+Next owner: <chief / worker / none>
+```
+
+A claim with missing release or uncertain expiry needs Chief reconciliation. Never infer successful completion merely from elapsed time.
+
 ## A. Chief creates a new implementation issue
 
 **GitHub Issue:** `#142 Add idempotent request replay guard`
