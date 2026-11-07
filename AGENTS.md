@@ -8,11 +8,11 @@
 
 ## 1. Mandatory authority and first actions
 
-**GitHub Projects v2 is the only execution queue and authoritative workflow-status board.** GitHub Issues linked to that Project are the authoritative individual task specifications and histories. GitHub PRs, commits, Actions and versioned repository documents are supporting technical evidence. GitHub Discussions may host exploration, never hidden or independent work queues. Do not rely on Linear, chat history, local TODO files, memory, or a parallel kanban system as the task source.
+**GitHub Projects v2 is the only execution queue and authoritative workflow-status board. Agents are invoked or scheduled by the human owner, not by GitHub labels, issue changes, Actions workflows, or a central dispatcher.** GitHub Issues linked to that Project are the authoritative individual task specifications and histories. GitHub PRs, commits, Actions and versioned repository documents are supporting technical evidence. GitHub Discussions may host exploration, never hidden or independent work queues. Do not rely on Linear, chat history, local TODO files, memory, or a parallel kanban system as the task source.
 
-Before any work, every agent MUST:
+Before any work, every agent MUST (whether launched from Codex, OpenCode, ChatGPT Work, a custom orchestrator, or another tool):
 
-1. Read this policy, then query **[PROJECT_URL] live**, including *all pages*, filtered by its authorized route. Read the target issue body, recent comments, labels, current Project **Status**, dependencies/sub-issues, linked decisions and PRs. Avoid acting on stale cached views.
+1. Read this policy, establish its explicit role (`chief` or `worker`), and query **[PROJECT_URL] live**, including *all pages*, filtered by its authorized route. Read the target issue body, recent comments, labels, current Project **Status**, dependencies/sub-issues, linked decisions and PRs. Avoid acting on stale cached views.
 2. Confirm the target is a **repository-backed GitHub Issue in the designated Project**, not a Project draft. Convert drafts to issues before dispatch. Do not start from an untracked user request: Chief records it as a Project-linked issue first (except emergency containment; see section 10).
 3. Inspect latest default-branch HEAD and relevant project build/test commands and architecture constraints; identify existing tests, open PRs and potential overlapping worktrees.
 4. Validate the role-label invariant and permissions before changing anything. If API access is missing, report **NOT VERIFIED**, not success.
@@ -93,7 +93,7 @@ If any item is unknown, Chief researches or labels `chief` + `human` as appropri
 
 ## 5. Worker — execute, prove, escalate
 
-Worker only selects issues with **`worker` and Project Status `Ready`**, or legitimately `In Progress` with a verified current lease. Worker never performs new project planning from memory. For each issue:
+Worker selects **`worker` + Project `Ready`** issues, or resumes its own **`In Progress`** issue only after verifying the current claim. Never claim another session's live work. Worker never performs new project planning from memory. For each issue:
 
 1. Verify route and current Project membership/status, current branch, blockers, issue specification and active worker ownership. Post **START** (scope, run ID, owner identity/model, baseline SHA, plan, test commands, risks, expected PR) and verify saved comment. Transition Project to `In Progress`; read back.
 2. Create an isolated short-lived branch/worktree from current default-branch HEAD. Prefer tests before implementation (RED→GREEN) when feasible; write focused code and tests, documenting deviations.
@@ -171,7 +171,29 @@ GitHub **does not supply a multi-resource ACID transaction** across comments, la
 
 For **a specific implementation task, escalation, human gate or review**, use comments on **that GitHub Issue**; for code-line review use PR review threads. If a Discussion yields a decision or task, Chief summarizes approved conclusion and sources in the corresponding Project-linked issue/ADR, creates native dependencies and routes the next executor. Agents may link to a Discussion, but must not require the Worker to reconstruct missing instructions from a long unbounded conversation.
 
-## 12. Bootstrap checklist for a new repository
+## 12. Agent-initiated execution: single-issue and queue modes
+
+**No automatic agent triggering.** The owner launches or schedules AI tool sessions. There is **no** mandatory central dispatcher, runner URL, runner token, provider SDK, model endpoint, or agent-triggering GitHub Actions workflow. `chief` and `worker` are *work ownership labels* and not automation triggers. The same model/tool may act in either role in different explicitly designated sessions, but must not impersonate an independent review it did not perform.
+
+**Session inputs:** role (`chief` or `worker`), mode (`single-issue` or `queue`), target issue number for single-issue, and optional **maximum number of issues** for queue mode. The human supplies a schedule externally; the GitHub repository does not schedule or start these sessions. If a session lacks an explicit role or cannot access Projects and issue history, stop with an explanation; do not guess.
+
+**Single-issue mode:** open the named issue in the canonical Project, read every relevant comment/handoff and live Status, validate labels, blockers and claim, perform the current role's permitted work, and write back proof/changes. An issue not assigned to the session's role is not permission to relabel it. Finish with an exact issue/PR/status summary.
+
+**Queue mode:** enumerate all Project items with pagination; select only issues bearing the current role, in eligible statuses, without `human`, unresolved dependencies, or an active conflicting claim. Sort by Project Priority (P0 before P1 before P2 before P3), then existing Project order or issue creation time and issue number as explicit stable tie-breakers. Read each issue *again* immediately before claiming; never dispatch from a cached Project board or infer queue membership from repository issue searches. For Worker, default to `Ready` only; for Chief, process incoming review/escalation/blocked reconciliation before new research. A Chief may resume its own valid `In Progress` research. Skip blocked `chief`+`human` issues except to inspect new owner evidence and clear the human gate when truly resolved. Process one issue at a time unless the user explicitly authorizes parallel, isolated and non-overlapping work; stop at the configured issue count, an unrecoverable error, unclear approval, permissions failure, or exhausted eligible work. Do **not** loop indefinitely, repeatedly retry rate-limited APIs, or start unrelated tasks.
+
+**Best-effort claim protocol (not a distributed lock):**
+1. Re-fetch issue, Project Status, labels, dependency state, PRs, comments and any active `START` claim. Use a unique `run_id` (agent tool/session identifier + timestamp) with a bounded lease expiry (e.g. 60 minutes, extended by dated `PROGRESS` heartbeat comments only when needed). Record an owner/model identity and exact baseline SHA.
+2. Before nontrivial work, publish a `START` comment containing `<!-- claim:ISSUE-N:RUN-ID -->`, expected expiry, intended scope and role, then read it back. Transition the Project status as allowed and verify read-back. **Recheck for a competing claim** and Project state before modifying code, comments, labels, or statuses.
+3. If another non-expired claim is present, do not overwrite, steal, or compete: skip in queue mode, or report **CONFLICT / BLOCKED** in single-issue mode. Only Chief can decide how to recover an expired/ambiguous claim using evidence; expiry does not grant exclusive ownership.
+4. On progress, record actual checks and refresh the advisory claim when necessary. On stopping, complete the required handoff/closeout or post a precise `BLOCKED` comment with remaining work and next action. A scheduled run does not imply that work was completed.
+
+**Issue ownership and idempotency:** transition comments use stable unique `handoff-id` markers. Before each mutation, re-read the issue and Project and search previous comments for that marker; after writing, read back. A crash or ambiguous timeout must cause *reconciliation* rather than a blind duplicate mutation. Role-label and Project-status writes are separate operations with no cross-resource ACID transaction. Keep conflicting issues safe in `chief` + `Blocked` until reconciled; preserve classification labels. Never remove a real human gate to resolve a technical conflict.
+
+**Chief/Worker boundaries:** Chief researches, designs, decides within approved authority, certifies DoR and reviews but does **not** implement product code. Worker implements only Chief-certified tasks, runs checks, creates PRs, records evidence and escalates novel critical decisions. Chief hands off by recording self-contained instructions and changing `chief` → `worker` with Project `Ready`; Worker hands back by recording PR evidence and changing `worker` → `chief` with Project `In Review` or `Blocked`, as appropriate. The `human` flag may coexist only with `chief`, and Chief alone clears it after objectively verifying the requested action.
+
+**Scheduling:** the owner may configure native scheduling in a chosen AI tool or invoke agents manually. A session must still perform the same live queue/claim/read-back checks. The existing GitHub Actions `governance.yml` is **read-only for Project/issue auditing** and offline validator testing; it must never be repurposed to start a model. GitHub Discussions support research discussion, but actionable tasks/decisions must be captured in Project-linked Issues.
+
+## 13. Bootstrap checklist for a new repository
 
 - [ ] Fill in `[PROJECT_NAME]`, `[OWNER/REPOSITORY]`, `[PROJECT_URL]`, default branch and real test commands in the issue/PR templates.
 - [ ] Create labels `chief`, `worker`, `human`; use exact spelling and enforce XOR/implication policy.
@@ -179,6 +201,7 @@ For **a specific implementation task, escalation, human gate or review**, use co
 - [ ] Install a validated GitHub Issue Form and PR template; add CI and governance/reconciler checks.
 - [ ] Configure protected default branch, least-privilege CI token, required checks and review gate that a solo maintainer can actually satisfy.
 - [ ] Optionally enable Discussions with research/Q&A categories and a review-to-issue summarization rule.
+- [ ] Manually invoke or schedule Chief and Worker sessions; do not install a runner/dispatcher for GitHub-triggered execution.
 - [ ] Test a complete dry-run cycle: `chief` research → Ready `worker` → escalation to Chief → Worker implementation → Chief review → intentional merge → Done; also test a real `chief`+`human` blockage.
 - [ ] Verify every write via GitHub API read-back; log limitations and failed gates honestly.
 
