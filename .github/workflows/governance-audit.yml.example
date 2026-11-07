@@ -1,0 +1,40 @@
+# TEMPLATE ONLY — rename to governance-audit.yml AFTER configuring the Project.
+# Required: repo Actions variable GH_PROJECT_NODE_ID and Actions secret
+# GH_PROJECTS_READ_TOKEN with read access to the GitHub Project and repository.
+# No write permissions; this audit cannot fix issues or grant access.
+name: Read-only AI Governance Audit
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '20 2 * * *'
+permissions:
+  contents: read
+  issues: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GH_PROJECTS_READ_TOKEN }}
+      PROJECT_ID: ${{ vars.GH_PROJECT_NODE_ID }}
+    steps:
+      - name: Checkout governance checker
+        uses: actions/checkout@v4
+      - name: Verify configuration
+        shell: bash
+        run: |
+          test -n "$GH_TOKEN" || { echo 'Missing GH_PROJECTS_READ_TOKEN secret'; exit 2; }
+          test -n "$PROJECT_ID" || { echo 'Missing GH_PROJECT_NODE_ID variable'; exit 2; }
+      - name: Audit role, Project membership and workflow status
+        shell: bash
+        run: |
+          python3 scripts/validate_governance.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --project-id "$PROJECT_ID" \
+            --output governance-report.json
+      - name: Upload read-only audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-governance-audit
+          path: governance-report.json
+          if-no-files-found: ignore
