@@ -13,7 +13,7 @@
 Before any work, every agent MUST (whether launched from Codex, OpenCode, ChatGPT Work, a custom orchestrator, or another tool):
 
 1. Read this policy, establish its explicit role (`chief` or `worker`), and query **[PROJECT_URL] live**, including *all pages*, filtered by its authorized route. Read the target issue body, recent comments, labels, current Project **Status**, dependencies/sub-issues, linked decisions and PRs. Avoid acting on stale cached views.
-2. Confirm the target is a **repository-backed GitHub Issue in the designated Project**, not a Project draft. Convert drafts to issues before dispatch. Do not start from an untracked user request: Chief records it as a Project-linked issue first (except emergency containment; see section 10).
+2. Confirm the target is a **repository-backed GitHub Issue in the designated Project**, not a Project draft. Convert drafts to issues before starting work. Do not start from an untracked user request: Chief records it as a Project-linked issue first (except emergency containment; see section 10).
 3. Inspect latest default-branch HEAD and relevant project build/test commands and architecture constraints; identify existing tests, open PRs and potential overlapping worktrees.
 4. Validate the role-label invariant and permissions before changing anything. If API access is missing, report **NOT VERIFIED**, not success.
 
@@ -63,9 +63,9 @@ Create a GitHub **Projects v2** Project for each product/repository (or one deli
 
 **Status is changed in the GitHub Project field, not a second label or separate tracker.** GitHub issue open/closed is an intentionally limited projection: open for everything except `Done`/`Canceled`; close only after the corresponding exit gate. Do not treat a closed issue, a green CI run, or a 'Done' Project value alone as proof of acceptance. Configure built-in automation conservatively, and reconcile Project status against issue state (GitHub's automatic close→Done flow can otherwise hide a premature close).
 
-Chief checks each new issue is in exactly the intended Project. Configure Project auto-add for future issues, **backfill pre-existing issues separately**, and verify the Project's actual item list. Never dispatch from repository issue search without Project membership.
+Chief checks each new issue is in exactly the intended Project. Configure Project auto-add for future issues, **backfill pre-existing issues separately**, and verify the Project's actual item list. Never select work from repository issue search without Project membership.
 
-## 4. Chief — plan, research, decide, dispatch, review
+## 4. Chief — plan, research, decide, hand off, review
 
 Chief is the **superior reasoning model**; it investigates repository code and official/current sources, consults independent specialist reviewers when useful, prepares designs and issue specifications, but **does not implement product code**. Routine low-risk decisions within approved constraints can be made by Chief. Decisions that materially change scope, permissions, licensing, privacy posture, trust model, production behavior or spending require explicit owner authorization in the issue before adoption.
 
@@ -150,12 +150,12 @@ GitHub **does not supply a multi-resource ACID transaction** across comments, la
 
 - **Atomicity (logical):** for each handoff, Chief/Worker prepares one uniquely identified comment containing next owner, reason and proposed status. Then update **the entire primary-role label set in one Issue labels mutation** (`chief` XOR `worker`; `human` only with `chief`), then update the Project Status. Read back all three. On partial failure, leave a reconciliation marker, stop the next agent and repair/compensate using read-back; never claim the overall transition committed merely because one write succeeded.
 - **Consistency:** invariants from §2, exactly one Project membership, statuses from §3, dependencies, role/DoR, accepted proofs before Done, no unauthorized merges. A governance check should detect and report violations; it must not silently correct uncertain semantics.
-- **Isolation:** only one active writer/dispatcher per issue. Record run ID and an advisory lease in START and recheck immediately before writes. GitHub labels/comments are **not a distributed lock or compare-and-swap**; a real concurrent multi-controller installation needs a single dispatch coordinator or external lock. Separate Git worktrees/branches to prevent filesystem interference.
+- **Isolation:** only one active **agent session** may work on an issue at a time. Record a run ID and advisory expiry in START; recheck live claims before writes. GitHub labels/comments are **not a distributed lock or compare-and-swap**. Independently scheduled Chief/Worker sessions must back off on conflicts rather than assuming exclusivity; true hard mutual exclusion requires an external shared lock or one coordinator, neither of which is bundled or required. Separate Git worktrees/branches prevent filesystem interference.
 - **Durability:** issue/PR comments, SHA-pinned PRs/commits, CI artifacts, immutable external evidence references and regular exports/backups. Confirm persistence by authoritative API read-back. Do not assume third-party links or CI artifacts are retained forever.
 
 **Handoff protocol** (both directions): (1) fresh issue+Project+role read; (2) check no conflicting active run and prerequisites; (3) post uniquely tagged `PREPARE HANDOFF` comment (e.g. `<!-- handoff-id:ISSUE-RUN-SEQ -->`); (4) replace primary labels together and remove `human` only if its gate was verified; (5) change Project `Status`; (6) read back role, status and handoff comment; (7) post `HANDOFF VERIFIED` only when all match. If interrupted, next Chief/reconciler replays idempotently from the same ID; if conflicts remain, use `chief` + `Blocked` and report them. Never repeat write blindly after ambiguous API timeouts.
 
-**Required reconciler checks**, scheduled or run on every dispatch: orphan/unprojected issues, zero/two primary roles, invalid `human`, role versus Project status mismatch, expired/conflicting leases, skipped/duplicate transitions, blockedBy not Done, Ready without DoR, closed issue not Done/Canceled, Done without merged-SHA/acceptance, stale PR head/approval, missing review/CI and lost Project item. Output actionable issues or a concise evidence-linked audit comment. No endless autonomous retry loops.
+**Required reconciler checks**, run in the existing read-only governance audit, at the start of each manually invoked/scheduled agent session, or in an explicitly authorized Chief maintenance pass: orphan/unprojected issues, zero/two primary roles, invalid `human`, role versus Project status mismatch, expired/conflicting leases, skipped/duplicate transitions, blockedBy not Done, Ready without DoR, closed issue not Done/Canceled, Done without merged-SHA/acceptance, stale PR head/approval, missing review/CI and lost Project item. Output actionable issues or a concise evidence-linked audit comment. No endless autonomous retry loops.
 
 ## 10. Security, permissions and exceptional work
 
@@ -167,7 +167,7 @@ GitHub **does not supply a multi-resource ACID transaction** across comments, la
 
 ## 11. Discussions vs Issues vs PR conversations
 
-**GitHub Discussions are permitted** for asynchronous agent-to-agent exploration, architecture options, research debates, Q&A and RFCs. Suggested categories: `Research/RFC`, `Architecture`, `Questions`, `Retrospectives`. A Discussion is a threaded forum, **not an agent message bus, queue, lock, approval mechanism or project-status record**. Replies may be delayed and must not be assumed delivered to another AI session unless there is an explicit polling/webhook dispatcher.
+**GitHub Discussions are permitted** for asynchronous agent-to-agent exploration, architecture options, research debates, Q&A and RFCs. Suggested categories: `Research/RFC`, `Architecture`, `Questions`, `Retrospectives`. A Discussion is a threaded forum, **not an agent message bus, queue, lock, approval mechanism or project-status record**. Replies may be delayed and must not be assumed delivered to another AI session; each scheduled/invoked Chief session queries relevant Discussions itself.
 
 For **a specific implementation task, escalation, human gate or review**, use comments on **that GitHub Issue**; for code-line review use PR review threads. If a Discussion yields a decision or task, Chief summarizes approved conclusion and sources in the corresponding Project-linked issue/ADR, creates native dependencies and routes the next executor. Agents may link to a Discussion, but must not require the Worker to reconstruct missing instructions from a long unbounded conversation.
 
