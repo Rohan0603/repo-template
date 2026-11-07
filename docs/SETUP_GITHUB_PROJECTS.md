@@ -53,7 +53,7 @@ Chief and Worker are **roles** fulfilled by independently invoked AI sessions, n
 
 - **Single-issue:** specify exactly one GitHub issue and role. Verify live labels, Project membership, dependencies and active claim before work.
 - **Queue:** specify a role and issue-count limit. Process eligible issues by Priority and stable tie-break; never execute two claimed/conflicting issues at once.
-- **Safe claim:** comment `START` with a unique run ID and advisory expiry, read back, check for duplicate/competing claims, then transition Project Status. Labels/comments are not distributed locks: conflicting sessions must stop and seek Chief reconciliation.
+- **Safe claim:** inspect all comments for active/ambiguous claims, comment `START` with a unique run ID and UTC expiry, then read back and re-check competing claims **before** changing Project Status or doing work. On a conflict, stop without relabeling or changing Status. After an evidenced handoff or stop, write and verify the matching `<!-- claim-end:ISSUE-N:RUN-ID -->` `CLAIM RELEASED` comment. Missing release or expired claims require Chief reconciliation; labels/comments are not distributed locks.
 - **Handoffs:** record complete decisions/proofs on the issue, update `chief` XOR `worker` and its Project Status, and read back all mutations. `human` only coexists with Chief, who clears it after the human-only gate is verified.
 - **Governance CI:** keep read-only audit of labels, Project membership and statuses. Do not let GitHub Actions automatically dispatch AI sessions.
 
