@@ -64,7 +64,7 @@ Add saved views in the GitHub Projects UI: All/table, Chief queue, Worker ready,
 
 ## 3. Labels and issue forms
 
-In the repository's **Issues → Labels** create exact lowercase `chief`, `worker`, `human`. The bundled issue form defaults to `chief`; GitHub requires a label to already exist if a form should apply it. Do not add redundant status labels or use `human` alone.
+In the repository's **Issues → Labels** create exact lowercase `chief`, `worker`, `human` and non-routing `metadata-bootstrap` (or use `scripts/bootstrap_github.ps1 -Repo OWNER/REPO -Execute`, after a dry-run). The bundled issue form defaults to `chief` and requires Chief to specify **target Project, approved Priority, milestone (or NOT REQUIRED), native dependencies/sub-issues, and missing API operations**. GitHub requires a label to already exist if a form should apply it. Do not add redundant status labels or use `human` alone.
 
 Configure Project built-in **auto-add** to capture newly created/updated issues from the repository. **Backfill existing issues separately**: auto-add does not retroactively include old items.
 
@@ -83,13 +83,33 @@ Do not use untracked Project **draft** items as implementation tasks. Convert dr
 
 Chief and Worker are **roles** fulfilled by independently invoked AI sessions, not named hosted bots. The owner can start any supported tool manually or schedule its check using that tool's own scheduler. The session must read `AGENTS.md`, query the live Project (all pages), and select eligible Project-linked issues by role and Status.
 
-- **Single-issue:** specify exactly one GitHub issue and role. Verify live labels, Project membership, dependencies and active claim before work.
-- **Queue:** specify a role and issue-count limit. Process eligible issues by Priority and stable tie-break; never execute two claimed/conflicting issues at once.
+- **Single-issue:** specify exactly one GitHub issue and role. Normal implementation must verify live labels, Project membership, `Ready`, dependencies and active claim. An issue explicitly labeled `worker + metadata-bootstrap` is a **separate metadata-only bootstrap** task that may start from its repository Issue URL before Project membership exists; implementation is forbidden until Chief subsequently certifies DoR.
+- **Queue:** specify a role and issue-count limit. Normal implementation enumerates the Project's paginated `worker + Ready` items **excluding `metadata-bootstrap`**. A separately requested **metadata-bootstrap queue** may search only repository issues with both `worker` and `metadata-bootstrap` and perform metadata-only writes. Never merge those two queues or process a conflicting claim.
 - **Safe claim:** inspect all comments for active/ambiguous claims, comment `START` with a unique run ID and UTC expiry, then read back and re-check competing claims **before** changing Project Status or doing work. On a conflict, stop without relabeling or changing Status. After an evidenced handoff or stop, write and verify the matching `<!-- claim-end:ISSUE-N:RUN-ID -->` `CLAIM RELEASED` comment. Missing release or expired claims require Chief reconciliation; labels/comments are not distributed locks.
-- **Handoffs:** record complete decisions/proofs on the issue, update `chief` XOR `worker` and its Project Status, and read back all mutations. `human` only coexists with Chief, who clears it after the human-only gate is verified.
+- **Handoffs:** first Chief → Worker handoff ALWAYS contains the `GITHUB METADATA SETUP` checklist (`Project`, `Status`, `Priority`, milestone, native relations, assignee/required fields; VERIFIED / TO SET / NOT REQUIRED / NOT VERIFIED). If Chief cannot update/verify required metadata, the exception is a **`METADATA BOOTSTRAP HANDOFF`** with `worker + metadata-bootstrap` and **no Project `Ready` assertion**. Worker completes only approved metadata, reads back, and routes to Chief; Chief alone certifies DoR before normal implementation handoff. For ordinary handoffs, update `chief` XOR `worker` and Project Status, and read back all mutations. `human` only coexists with Chief, who clears it after the human-only gate is verified.
 - **Governance CI:** keep read-only audit of labels, Project membership and statuses. Do not let GitHub Actions automatically dispatch AI sessions.
 
 There are **no** `AGENT_RUNNER_URL`, `AGENT_RUNNER_TOKEN`, provider/model deployment, or agent-triggering workflows required for this approach. Token credentials used for optional read-only auditing remain separate from the agents' own authorized GitHub access.
+
+### First-handoff metadata bootstrap — for a Chief lacking Projects/Milestones API
+
+This is **not** a substitute for Project `Ready`; it is a bounded owner-authorized **metadata-only** exception. Before the first Worker implementation handoff, Chief records exact target values and missing operations in the issue. The values must be selected by Chief or explicitly approved by owner; missing decisions are a blocker, not Worker discretion.
+
+| Metadata | Chief supplies | Worker, if Chief API is blocked |
+|---|---|---|
+| GitHub Project | canonical URL, owner, project number | Verify current membership, add if missing, read back |
+| Project fields | selected Priority, Backlog during bootstrap, required custom fields | Set only approved values; read back per field |
+| Milestone | exact existing title/number, or explicitly NOT REQUIRED | Assign existing milestone; create only if separately approved with an exact title and scope |
+| Native dependencies / sub-issues | exact blocking/parent issue URLs and relationship | Apply and read back supported native relations; escalate if unavailable |
+| Other issue fields | exact assignee or other approved values | Apply and independently verify |
+
+1. Chief posts `METADATA BOOTSTRAP HANDOFF`, stating **IMPLEMENTATION NOT AUTHORIZED**, with the checklist, sources, permission gaps and a unique handoff ID. Set **`worker` + `metadata-bootstrap`** and read back the issue labels. The Project may not yet contain the issue.
+2. The human invokes a Worker in **single-issue** or explicitly requested **metadata-bootstrap queue** mode. The Worker reads the entire issue and all claims, posts/reads a unique START, then checks conflicts and permission before making any metadata write. Do not branch or implement code.
+3. Worker adds the item to the correct Project if necessary, fills approved metadata and reads back Project item/fields and milestone/dependency relationships. Where supported, `gh project item-list PROJECT_NUMBER --owner OWNER --limit 1000 --format json --field "Status" --field "Priority"` can assist read-back; check pagination and values. Do not paste tokens in chat or create a milestone speculatively.
+4. Worker posts `METADATA VERIFIED` or `METADATA BLOCKED` with per-field evidence/errors, removes `metadata-bootstrap`, changes `worker` → `chief` and verifies labels, then releases the START claim. If incomplete, Chief retains and resolves the blocker.
+5. Chief independently verifies all metadata, issues the **separate** implementation `CHIEF RESPONSE/HANDOFF` only after full DoR, and sets `worker + Ready` with Project read-back. If Chief still cannot access Projects, it requests an authorized verifier and does not claim `Ready`.
+
+**No automatic agents:** label changes, Project events, Actions and comments must not invoke Codex/Claude Code/OpenCode/ChatGPT. A human invokes or schedules sessions in those tools. See `AGENTS.md` §4 and `docs/WORKFLOW_EXAMPLES.md` §0 for the canonical policy and copy-ready comment templates.
 
 ## 5. Git and PR controls
 
@@ -111,6 +131,7 @@ When exploration yields an actionable conclusion, Chief creates/updates the **Pr
 - [ ] Root `AGENTS.md` is automatically discovered and read in full by the chosen agent runtime (test with a fresh session).
 - [ ] All actionable issues appear in the Project, including backfilled legacy work; draft work converted to issues.
 - [ ] All issues have `chief` XOR `worker`; if `human`, also `chief`.
+- [ ] Bootstrap cases carry `worker + metadata-bootstrap` only during metadata setup, and end with `chief` plus independent project/field read-back before code authorization.
 - [ ] Every queue view matches a direct, paginated Project API query; reconcile differences.
 - [ ] Real Worker DoR/START/implementation/review/closeout cycle passes end-to-end.
 - [ ] Worker-to-Chief escalation and Chief-to-Worker handoff record correct comments, role labels and Project Status with read-back.
