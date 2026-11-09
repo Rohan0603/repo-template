@@ -20,10 +20,11 @@ See `AGENTS.md` §4, `docs/WORKFLOW_EXAMPLES.md` §0 and `docs/SETUP_GITHUB_PROJ
 - `.github/ISSUE_TEMPLATE/agent_task.yml` — form for full work context, starts with `chief`.
 - `.github/pull_request_template.md` — exact evidence and review gate template.
 - `docs/SETUP_GITHUB_PROJECTS.md` — setup commands, views, branch governance and pilot tests.
-- `docs/RESEARCH_DECISIONS.md` — sources, rationale and limitations.
 - `docs/WORKFLOW_EXAMPLES.md` — complete Chief/Worker/Human transition examples.
 - `scripts/validate_governance.py` — optional **read-only** role/Project/status audit; does not grant or enforce permissions.
-- `.github/workflows/governance-audit.yml.example` — optional daily/manual read-only Project audit; rename only after setting up secrets/variables.
+- `scripts/test_validate_governance.py` — offline invariant tests executed by the active governance CI.
+- `scripts/bootstrap_github.ps1` — preview/apply repository label and merge-setting initialization for generated repositories.
+- `.github/workflows/governance.yml` — active offline CI plus optional scheduled/manual read-only Project audit.
 
 The starter kit does not introduce GitHub-triggered model execution. The scheduled governance audit remains read-only. Github Project creation and CLI authorization are separate actions to perform for each **new** repository. Never paste access tokens in chat or commit them to this package.
 
@@ -32,7 +33,7 @@ The starter kit does not introduce GitHub-triggered model execution. The schedul
 The template includes an **active** GitHub Actions workflow in `.github/workflows/governance.yml`:
 
 - Pull requests and pushes to `main` run the offline governance-validator unit tests with no secrets.
-- Scheduled/manual Projects audits run **only** when the repository variable `GH_PROJECT_NODE_ID` is set. They also require the repository secret `GH_PROJECTS_READ_TOKEN` with **read-only** access to the target Project. A missing secret fails the configured audit; it never silently reports a pass.
+- Scheduled/manual Projects audits are already included in this single workflow; they run **only** when the repository variable `GH_PROJECT_NODE_ID` is set. They also require the repository secret `GH_PROJECTS_READ_TOKEN` with **read-only** access to the target Project. A missing secret fails the configured audit; it never silently reports a pass. No second audit workflow needs to be installed or renamed.
 - The workflow checks route/status consistency only; it does not automatically dispatch agents or enforce branch protection.
 
 On Windows after creating a new repository from this template:
