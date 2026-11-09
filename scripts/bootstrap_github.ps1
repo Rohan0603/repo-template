@@ -30,7 +30,8 @@ Write-Host "Repository: $Repo | private: $($info.private) | template: $($info.is
 $labels = @(
   @{name='chief'; color='5319e7'; description='Superior model: research, architecture, decisions and review'},
   @{name='worker'; color='0e8a16'; description='Scoped implementation and technical evidence'},
-  @{name='human'; color='d93f0b'; description='Human-only gate; permitted together with chief only'}
+  @{name='human'; color='d93f0b'; description='Human-only gate; permitted together with chief only'},
+  @{name='metadata-bootstrap'; color='c5def5'; description='Metadata-only worker setup before Project Ready; must return to chief'}
 )
 $currentLabels = @(& gh api --paginate "repos/$Repo/labels?per_page=100" --jq '.[].name')
 if ($LASTEXITCODE -ne 0) { throw 'Cannot read repository labels' }
