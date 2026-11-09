@@ -10,6 +10,38 @@
 - Check authorization: `gh auth status`, `gh api user --jq .login`, `gh project list --owner [OWNER]`.
 - Neither GitHub Projects labels nor the `gh` CLI trigger AI agents. The human owner invokes or schedules Chief/Worker directly within Codex, OpenCode, ChatGPT Work, a custom orchestrator, or another chosen runtime. Do not install an agent-dispatching service, provider endpoint or runner credentials for this template.
 
+### Troubleshooting Projects v2 permissions for Chat-mode agents
+
+Repository Issue access and Projects v2 access are separate permission surfaces. A successful issue read, label update, or comment does not prove that an agent can read a Project, its item membership, or its Status and Priority fields. Labels and Project Status are independent: changing `chief`/`worker` never changes Status, and labels never launch a model. The human must invoke each Chief or Worker session separately.
+
+Use a read-only diagnostic, without requesting or pasting a token into chat:
+
+```sh
+gh auth status
+gh api user --jq .login
+gh project list --owner OWNER --limit 100
+gh project item-list PROJECT_NUMBER --owner OWNER --limit 1000 --field "Status" --field "Priority" --format json
+gh project field-list PROJECT_NUMBER --owner OWNER
+```
+
+Interpret the result narrowly:
+
+- **Tool discovery failure:** the runtime exposes no Projects operation. Record Project membership, Status, and Priority as **NOT VERIFIED**; do not guess or make a write.
+- **HTTP 401:** authentication is missing or expired. Stop and ask the owner to authenticate through the approved UI/CLI flow; never ask for the credential value in chat.
+- **HTTP 403:** the request reached GitHub but this authentication path is not authorized for that Project or operation. Do not infer that the Project or item is absent, and do not retry by broadening permissions blindly.
+- **HTTP 200 with no matching item or field:** complete pagination and filtering first. If membership, Status, or Priority still cannot be read back, keep that gate **NOT VERIFIED**.
+
+Personal (user-owned) Projects and organization-owned Projects do not have identical token compatibility. GitHub's [Projects REST items documentation](https://docs.github.com/en/rest/projects/items) notes that adding an item to a user-owned Project does not work with GitHub App user access tokens, GitHub App installation tokens, or fine-grained personal access tokens, while organization-owned Project operations have their own documented fine-grained permission requirements. Check the exact endpoint and authentication method before relying on a permission. For supported authentication paths, `project` (or a read-only `read:project` permission where offered) may be relevant; it does not make every personal-Project operation available. The [Projects API guide](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/using-the-api-to-manage-projects) is the authority for the current path and operation.
+
+#### Chief fail-closed handoff
+
+1. Read the issue, all comments, labels, dependencies, and the complete Project item/field result.
+2. If Issue APIs work but Project lookup returns a discovery failure, 401, 403, or incomplete membership/field data, record **NOT VERIFIED**, retain `chief`, and do not post a Worker `START` or claim `Ready`.
+3. Only after Project authorization is verified may Chief read back the issue's Project membership, Priority, and Status; then change `chief` → `worker` and `Backlog` → `Ready` as separate mutations.
+4. Read back each mutation and confirm no conflicting claim before the independently invoked Worker begins. A label-only transition is not evidence of Project `Ready`.
+
+Worker handback follows the same separation: provide the exact PR/head and test evidence, change `worker` → `chief`, and read back the label. Project `In Review` or `Done` still requires its own authorized Project read-back; do not substitute an Issue label.
+
 ## 2. Create a live Project (CLI examples)
 
 ```sh
