@@ -18,6 +18,34 @@ import urllib.error
 import urllib.request
 
 ALLOWED_STATUSES = {"Backlog", "Ready", "In Progress", "Blocked", "In Review", "Done", "Canceled"}
+
+
+def reconcile_metadata_bootstrap(*, active_claims: int, project_item_count: int,
+                                 pending_writes: list[str] | None = None,
+                                 retry_after_ambiguous_error: bool = False,
+                                 handback_labels_read_back: bool = False,
+                                 handback_comment_read_back: bool = False) -> list[str]:
+    """Return advisory findings for a live bootstrap reconciliation checkpoint.
+
+    This helper is deliberately offline and does not authorize writes. Live workers
+    must obtain the counts and read-backs from GitHub immediately before acting.
+    """
+    findings = []
+    if active_claims == 0:
+        findings.append("CLAIM_MISSING")
+    elif active_claims > 1:
+        findings.append("CLAIM_CONFLICT")
+    if project_item_count == 0:
+        findings.append("PROJECT_MEMBERSHIP")
+    elif project_item_count > 1:
+        findings.append("PROJECT_DUPLICATE")
+    if pending_writes:
+        findings.append("PARTIAL_WRITE")
+    if retry_after_ambiguous_error:
+        findings.append("RETRY_REQUIRES_READBACK")
+    if not (handback_labels_read_back and handback_comment_read_back):
+        findings.append("HANDBACK_NOT_VERIFIED")
+    return findings
 GRAPHQL = """
 query($id:ID!, $after:String) {
   node(id:$id) {
@@ -177,8 +205,11 @@ def audit(repo: str, issues: list[dict], project_items: list[dict]) -> dict:
             "metadata_bootstrap_pending": pending_bootstrap,
             "not_checked": ["Metadata bootstrap handoff authorization/claim evidence",
                             "Definition of Ready content", "Human approval authenticity",
-                            "Independent review quality", "Merge SHA/CI evidence",
-                            "Cross-issue dependency cycles", "Concurrent lease safety"]}
+            "Independent review quality", "Merge SHA/CI evidence",
+            "Cross-issue dependency cycles", "Concurrent lease safety",
+            "Bootstrap handoff authorization", "Competing Worker claims",
+            "Partial-write and retry safety", "Duplicate Project assignment",
+            "Label/comment handback success"]}
 
 
 def main() -> int:

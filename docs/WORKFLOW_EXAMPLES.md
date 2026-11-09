@@ -83,6 +83,14 @@ No implementation work has begun. No Project Ready was asserted.
 
 For **METADATA BLOCKED**, include the exact API error, unresolved fields, and next owner; return `chief`, remove the bootstrap flag, release claim, and stop. Missing metadata never silently authorizes code or a PR. If milestone creation is required, Chief supplies exact approved title/scope or escalates to owner; Worker never guesses.
 
+### Bootstrap reconciliation after competing or interrupted work
+
+Claims are advisory, not locks. If two Workers have active or ambiguous claims, both stop before metadata writes and Chief reconciles the issue. A clean audit or pending-bootstrap marker does not resolve that conflict or authorize a write.
+
+For every Project mutation, record the handoff ID and read back the complete item list and the specific field after the write. If an add or field update times out, returns an incomplete response, or is interrupted, do not repeat it blindly: re-query first, detect whether the item/field already exists, and retry only the missing operation. More than one matching Project item is a duplicate-assignment blocker; stop and escalate instead of selecting one. Record successful fields separately from unresolved fields.
+
+If the `worker` → `chief` label change, bootstrap-label removal, handback comment, or read-back fails, do not publish `METADATA VERIFIED` or release the claim as complete. Post a reconciliation marker with the exact successful and failed writes, leave the issue with Chief, and require a fresh read before compensation. The offline validator can flag structural duplicates and invalid status/role combinations, but cannot prove claim exclusivity, API atomicity, retry safety or handback success; those remain **NOT VERIFIED** until live read-back.
+
 Only after Chief independently certifies the full Definition of Ready and reads back `worker` + Project `Ready` does the normal implementation sequence in examples A–D apply.
 
 ## A. Chief creates a new implementation issue

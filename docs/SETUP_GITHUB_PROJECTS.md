@@ -33,12 +33,13 @@ Interpret the result narrowly:
 
 Personal (user-owned) Projects and organization-owned Projects do not have identical token compatibility. GitHub's [Projects REST items documentation](https://docs.github.com/en/rest/projects/items) notes that adding an item to a user-owned Project does not work with GitHub App user access tokens, GitHub App installation tokens, or fine-grained personal access tokens, while organization-owned Project operations have their own documented fine-grained permission requirements. Check the exact endpoint and authentication method before relying on a permission. For supported authentication paths, `project` (or a read-only `read:project` permission where offered) may be relevant; it does not make every personal-Project operation available. The [Projects API guide](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/using-the-api-to-manage-projects) is the authority for the current path and operation.
 
-#### Chief fail-closed handoff
+#### Chief fail-closed decision: bootstrap versus implementation
 
 1. Read the issue, all comments, labels, dependencies, and the complete Project item/field result.
-2. If Issue APIs work but Project lookup returns a discovery failure, 401, 403, or incomplete membership/field data, record **NOT VERIFIED**, retain `chief`, and do not post a Worker `START` or claim `Ready`.
-3. Only after Project authorization is verified may Chief read back the issue's Project membership, Priority, and Status; then change `chief` → `worker` and `Backlog` → `Ready` as separate mutations.
-4. Read back each mutation and confirm no conflicting claim before the independently invoked Worker begins. A label-only transition is not evidence of Project `Ready`.
+2. For **normal implementation**, any discovery failure, 401, 403, or incomplete membership/field data means Project membership/Status/Priority remain **NOT VERIFIED**: retain `chief`, do not claim `Ready`, and do not start implementation.
+3. For **metadata bootstrap only**, Chief may route `worker + metadata-bootstrap` without Project membership **only** when an exact owner/Chief-authorized `METADATA BOOTSTRAP HANDOFF` supplies the target Project, approved values, permissions gap, idempotency plan and `IMPLEMENTATION NOT AUTHORIZED`. The separately invoked Worker must verify that handoff and claims before any metadata write; a failure still means `METADATA BLOCKED`, not implementation authorization.
+4. A clean governance audit or `metadata_bootstrap_pending` result is advisory and does not authorize metadata operations. Worker independently verifies the handoff, target Project/fields, permissions, claims and current membership before writing.
+5. Only after every metadata mutation is read back and the issue returns to Chief may Chief independently certify the full DoR and perform the separate `worker` + Project `Ready` implementation handoff. A label-only transition is never evidence of Project `Ready`.
 
 Worker handback follows the same separation: provide the exact PR/head and test evidence, change `worker` → `chief`, and read back the label. Project `In Review` or `Done` still requires its own authorized Project read-back; do not substitute an Issue label.
 
@@ -72,7 +73,10 @@ Configure Project built-in **auto-add** to capture newly created/updated issues 
 # Example manual backfill; repeat for actual existing issue URLs (check membership first).
 gh project item-add PROJECT_NUMBER --owner OWNER --url https://github.com/OWNER/REPO/issues/123
 # Project field Status must be updated on the item, not by changing a status label.
-gh project item-edit PROJECT_NUMBER --owner OWNER --url https://github.com/OWNER/REPO/issues/123 --field Status --value Ready
+# `--url` identifies the issue/PR item; `--owner` identifies the Project owner.
+gh project item-edit PROJECT_NUMBER --owner OWNER --url https://github.com/OWNER/REPO/issues/123 --field "Status" --value "Ready"
+# Update one field per invocation for a non-draft issue.
+gh project item-edit PROJECT_NUMBER --owner OWNER --url https://github.com/OWNER/REPO/issues/123 --field "Priority" --value "P2 Medium"
 # Inspect authoritative Project items and values.
 gh project item-list PROJECT_NUMBER --owner OWNER --limit 1000 --format json
 ```
@@ -104,9 +108,9 @@ This is **not** a substitute for Project `Ready`; it is a bounded owner-authoriz
 | Other issue fields | exact assignee or other approved values | Apply and independently verify |
 
 1. Chief posts `METADATA BOOTSTRAP HANDOFF`, stating **IMPLEMENTATION NOT AUTHORIZED**, with the checklist, sources, permission gaps and a unique handoff ID. Set **`worker` + `metadata-bootstrap`** and read back the issue labels. The Project may not yet contain the issue.
-2. The human invokes a Worker in **single-issue** or explicitly requested **metadata-bootstrap queue** mode. The Worker reads the entire issue and all claims, posts/reads a unique START, then checks conflicts and permission before making any metadata write. Do not branch or implement code.
-3. Worker adds the item to the correct Project if necessary, fills approved metadata and reads back Project item/fields and milestone/dependency relationships. Where supported, `gh project item-list PROJECT_NUMBER --owner OWNER --limit 1000 --format json --field "Status" --field "Priority"` can assist read-back; check pagination and values. Do not paste tokens in chat or create a milestone speculatively.
-4. Worker posts `METADATA VERIFIED` or `METADATA BLOCKED` with per-field evidence/errors, removes `metadata-bootstrap`, changes `worker` → `chief` and verifies labels, then releases the START claim. If incomplete, Chief retains and resolves the blocker.
+2. The human invokes a Worker in **single-issue** or explicitly requested **metadata-bootstrap queue** mode. The Worker independently verifies the handoff, exact approved values, permissions, idempotency and all claims, posts/reads a unique START, then checks conflicts before making any metadata write. Do not branch or implement code. A clean audit is not authorization.
+3. Before adding, query the complete Project item list. If the issue is absent, add it once and read back; if it appears more than once, stop for reconciliation. After any timeout or partial response, re-query before retrying and repeat only missing operations. Read back Project item/fields and milestone/dependency relationships after each write. Where supported, `gh project item-list PROJECT_NUMBER --owner OWNER --limit 1000 --field "Status" --field "Priority" --format json` can assist read-back; check pagination and values. Do not paste tokens in chat or create a milestone speculatively.
+4. Worker posts `METADATA VERIFIED` or `METADATA BLOCKED` with per-field evidence/errors, removes `metadata-bootstrap`, changes `worker` → `chief` and verifies labels, then releases the START claim. If any label/comment handback fails, stop, leave a reconciliation marker and do not claim handback success. If incomplete, Chief retains and resolves the blocker.
 5. Chief independently verifies all metadata, issues the **separate** implementation `CHIEF RESPONSE/HANDOFF` only after full DoR, and sets `worker + Ready` with Project read-back. If Chief still cannot access Projects, it requests an authorized verifier and does not claim `Ready`.
 
 **No automatic agents:** label changes, Project events, Actions and comments must not invoke Codex/Claude Code/OpenCode/ChatGPT. A human invokes or schedules sessions in those tools. See `AGENTS.md` §4 and `docs/WORKFLOW_EXAMPLES.md` §0 for the canonical policy and copy-ready comment templates.

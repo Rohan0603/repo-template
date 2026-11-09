@@ -1,6 +1,6 @@
 """Offline invariant tests, no network access or GitHub writes."""
 import unittest
-from validate_governance import audit
+from validate_governance import audit, reconcile_metadata_bootstrap
 
 REPO = "owner/project"
 
@@ -67,6 +67,32 @@ class TestAudit(unittest.TestCase):
         codes = {v["code"] for v in a["violations"]}
         self.assertTrue({"BOOTSTRAP_STATUS", "BOOTSTRAP_ROUTE", "BOOTSTRAP_CLOSED"}
                         .issubset(codes))
+
+    def test_duplicate_project_assignments_are_rejected(self):
+        a = audit(REPO, [issue(1, ["worker", "metadata-bootstrap"])],
+                  [item(1, "Backlog"), item(1, "Backlog")])
+        self.assertIn("PROJECT_MEMBERSHIP", {v["code"] for v in a["violations"]})
+
+    def test_audit_is_advisory_about_bootstrap_authorization(self):
+        a = audit(REPO, [issue(1, ["worker", "metadata-bootstrap"])], [])
+        self.assertEqual(a["violation_count"], 0)
+        self.assertIn("Bootstrap handoff authorization", a["not_checked"])
+        self.assertIn("Competing Worker claims", a["not_checked"])
+
+    def test_reconciliation_flags_claims_partial_writes_retries_duplicates_and_handback(self):
+        findings = reconcile_metadata_bootstrap(
+            active_claims=2,
+            project_item_count=2,
+            pending_writes=["Priority"],
+            retry_after_ambiguous_error=True,
+            handback_labels_read_back=False,
+            handback_comment_read_back=False,
+        )
+        self.assertEqual(
+            {"CLAIM_CONFLICT", "PROJECT_DUPLICATE", "PARTIAL_WRITE",
+             "RETRY_REQUIRES_READBACK", "HANDBACK_NOT_VERIFIED"},
+            set(findings),
+        )
 
 
 if __name__ == "__main__":
