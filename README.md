@@ -48,3 +48,9 @@ pwsh -File scripts/bootstrap_github.ps1 -Repo OWNER/REPO -Execute
 The bootstrap script creates `chief`, `worker`, `human`, `metadata-bootstrap` labels and opts into Discussions and squash-only merges with merged-branch cleanup. These **repository settings are not copied** from the template into new repositories. Its dry-run mode is the default; it does not delete repositories or alter access controls.
 
 Complete the GitHub Projects v2 creation, Status options/views, auto-add/backfill, required checks, and default-branch protection in `docs/SETUP_GITHUB_PROJECTS.md`. Private-repository protections may require an eligible plan. Never represent an unconfigured Project or unenforced branch rule as active.
+
+## Before pushing: secret-leak protection
+
+This template includes fail-closed local `.githooks/pre-push` scanning via **Gitleaks** and a `Gitleaks secret scan` GitHub Actions workflow. For each clone, install Gitleaks and run `git config --local core.hooksPath .githooks`; on Windows you can use `pwsh -File scripts/install_secret_hooks.ps1`. Hooks are local and do not install automatically with `git clone`.
+
+Enable GitHub push protection where available and make the `Gitleaks secret scan` check required after its first successful run if the repository's rules allow it. This does not configure GitHub admin controls automatically, and does not remove existing exposed keys from history. See `docs/SECRET_SCANNING.md`. No AI agent is triggered by the scanner.
