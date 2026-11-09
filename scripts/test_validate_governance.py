@@ -1,6 +1,6 @@
 """Offline invariant tests, no network access or GitHub writes."""
 import unittest
-from validate_governance import audit, reconcile_metadata_bootstrap
+from validate_governance import audit, reconcile_metadata_bootstrap, check_metadata_handback_order
 
 REPO = "owner/project"
 
@@ -93,6 +93,21 @@ class TestAudit(unittest.TestCase):
              "RETRY_REQUIRES_READBACK", "HANDBACK_NOT_VERIFIED"},
             set(findings),
         )
+
+
+    def test_handback_requires_ordered_successful_readbacks(self):
+        valid = ["PREPARED_COMMENT_READBACK", "CHIEF_LABEL_READBACK",
+                 "FINAL_COMMENT_READBACK", "CLAIM_RELEASED_READBACK"]
+        self.assertEqual(check_metadata_handback_order(valid), [])
+
+    def test_handback_rejects_premature_final_or_missing_label(self):
+        premature = ["PREPARED_COMMENT_READBACK", "FINAL_COMMENT_READBACK",
+                     "CLAIM_RELEASED_READBACK"]
+        findings = check_metadata_handback_order(premature)
+        self.assertIn("HANDBACK_OUT_OF_ORDER", findings)
+        self.assertIn("HANDBACK_INCOMPLETE", findings)
+        missing = ["PREPARED_COMMENT_READBACK", "CHIEF_LABEL_READBACK"]
+        self.assertIn("HANDBACK_INCOMPLETE", check_metadata_handback_order(missing))
 
 
 if __name__ == "__main__":
