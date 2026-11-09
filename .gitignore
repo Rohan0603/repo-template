@@ -1,0 +1,10 @@
+# Secrets and local configuration. This prevents NEW untracked files being added.
+# Already-tracked secrets must be removed from the Git index/history separately.
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+id_rsa
+id_ed25519

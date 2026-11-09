@@ -237,3 +237,11 @@ For **a specific implementation task, escalation, human gate or review**, use co
 - [ ] Verify every write via GitHub API read-back; log limitations and failed gates honestly.
 
 **A model should not proceed based only on seeing this file. The live GitHub Project and issue state always determine what work is authorized now.**
+
+## Credential and secret-leak prevention
+
+- Never commit real `.env` files, API tokens, passwords, private keys or credentials. Use placeholder-only `.env.example` and approved secret stores.
+- Every local clone MUST enable the repository's fail-closed Gitleaks `.githooks/pre-push` hook before pushing (`git config --local core.hooksPath .githooks`); see `docs/SECRET_SCANNING.md`. Installation requires Gitleaks in PATH, and the PowerShell helper `scripts/install_secret_hooks.ps1` checks prerequisites.
+- GitHub PR/push secret scan CI must pass, and its check should be required where supported. Enable native GitHub push protection where eligible. Do not claim GitHub admin settings were enabled merely because the template contains instructions.
+- A detected or historically committed secret requires prompt provider-side revocation/rotation and separate exposure assessment. Removing files from the current branch alone is insufficient; do not rewrite protected Git history or bypass review without authorization.
+- The secret-scanning workflow is ordinary CI only: it MUST NOT launch Chief, Worker, Codex, OpenCode, or any other AI agent automatically.
