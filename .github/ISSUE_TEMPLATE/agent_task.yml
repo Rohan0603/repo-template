@@ -1,6 +1,6 @@
 name: Agent work item
-# Install labels chief, worker and human before enabling this form.
-# Do not specify projects here: GitHub Project auto-add + verification is the default.
+# Install labels chief, worker, human and metadata-bootstrap before enabling this form.
+# Do not specify Projects in frontmatter: auto-add and verified metadata-bootstrap are supported.
 description: Create a tracked Chief-owned task that can later be certified for Worker.
 title: "[TASK] "
 labels:
@@ -9,8 +9,9 @@ body:
   - type: markdown
     attributes:
       value: >
-        All tasks must be added to the authorized GitHub Project. Chief certifies
-        Definition of Ready before changing the route to worker. Never use
+        Ordinary implementation requires verified GitHub Project membership and Ready.
+        If Chief cannot configure metadata, a first handoff may be worker +
+        metadata-bootstrap for metadata ONLY, then return to Chief for DoR. Never use
         both chief and worker; human is optional only when chief is present.
   - type: textarea
     id: outcome
@@ -78,6 +79,23 @@ body:
     validations:
       required: true
   - type: textarea
+    id: metadata
+    attributes:
+      label: GitHub metadata setup and first-handoff checklist
+      description: Chief specifies exact target Project and approved values. Mark VERIFIED, TO SET, NOT REQUIRED or NOT VERIFIED. Worker must not invent values.
+      value: |
+        - Target Project URL / owner / number:
+        - Project membership: NOT VERIFIED (or evidence URL)
+        - Project Status now / target for bootstrap: Backlog (verify)
+        - Priority chosen by Chief: P0 / P1 / P2 / P3 (choose with rationale)
+        - Milestone: existing name/number / owner-approved create / NOT REQUIRED
+        - Native dependencies and sub-issues: exact issue URLs / NOT REQUIRED
+        - Assignee / other required fields: exact values / NOT REQUIRED
+        - Metadata actions ChatGPT Chief cannot perform: exact checklist
+        - Worker mode: metadata-bootstrap ONLY if any readiness-critical item is unresolved
+    validations:
+      required: true
+  - type: textarea
     id: risks
     attributes:
       label: Risk, security, rollback and approvals
@@ -95,5 +113,5 @@ body:
       options:
         - label: I checked for duplicate issues and will add this issue to the correct GitHub Project.
           required: true
-        - label: This issue starts Chief-owned; Chief will verify Definition of Ready before Worker routing.
+        - label: This issue starts Chief-owned. Any metadata-only Worker bootstrap must be explicitly scoped and return to Chief before implementation.
           required: true
