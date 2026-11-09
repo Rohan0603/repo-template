@@ -12,7 +12,7 @@
 
 ## GitHub server-side checks
 
-- `.github/workflows/secret-scan.yml` runs `gitleaks/gitleaks-action@v3` on pull requests, pushes to `main` or `master`, and manual dispatch. It does not start any AI agent.
+- `.github/workflows/secret-scan.yml` downloads the pinned Gitleaks `8.30.1` Linux CLI, verifies the published SHA-256 checksum before execution, runs the real synthetic-secret regression, and scans pull-request, `main`/`master` push, and manual-dispatch history. It does not require `GITLEAKS_LICENSE` and does not start any AI agent.
 - On supported branches, set **Gitleaks secret scan** as a required status check **after the first successful workflow run**, using the exact name GitHub reports. Do not invent or preconfigure a missing check.
 - Enable GitHub **Secret scanning / Push protection** under **Settings → Security and quality → Advanced Security**, if supported. GitHub's user-level push protection also covers supported secrets pushed to public repositories. Protection availability differs for private repositories and may depend on plan/entitlements.
 - Neither the hook nor CI is proof that all secret types were recognized. Review unusual custom tokens and credentials manually; restrict GitHub Actions permissions.
