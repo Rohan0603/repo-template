@@ -7,7 +7,7 @@ These are **examples only**. Replace numbers, SHA values, and links. Never asser
 
 ## Session claim and release (advisory, not a lock)
 
-Each separately started session checks **all** issue comments and live Project state before work. These example timestamps and IDs are illustrative, not proof of a real agent run.
+Each separately started session checks **all** issue comments and live Project state before work (or explicitly records the Project access gap in a metadata-bootstrap-only session). These example timestamps and IDs are illustrative, not proof of a real agent run.
 
 ```text
 <!-- claim:ISSUE-142:codex-20261108T090000Z-1 -->
@@ -30,6 +30,60 @@ Next owner: <chief / worker / none>
 ```
 
 A claim with missing release or uncertain expiry needs Chief reconciliation. Never infer successful completion merely from elapsed time.
+
+## 0. First handoff: GitHub metadata setup (required on every new issue)
+
+Chief includes this section even when the metadata is already complete. It is an **example**, not actual evidence:
+
+```text
+GITHUB METADATA SETUP — FIRST HANDOFF
+Project: https://github.com/users/OWNER/projects/7 (owner=OWNER, number=7)
+Project membership: VERIFIED, evidence <exact item URL / API read-back>
+Project Status: Backlog VERIFIED; intended after Chief DoR: Ready
+Priority: P2 Medium — selected by Chief, VERIFIED / TO SET
+Milestone: NOT REQUIRED (or approved existing milestone #3 and title)
+Dependencies/sub-issues: NOT REQUIRED (or exact issue URLs + native relationship)
+Assignee/other fields: NOT REQUIRED (or explicitly chosen values)
+Missing actions: none / list each operation to be completed by authorized Worker
+Mode: Normal implementation handoff ONLY if full DoR and Project Ready read-back succeed.
+```
+
+### Bootstrap-only alternative when ChatGPT cannot configure Projects/milestones/dependencies
+
+An **unprojected** Issue is never treated as implementation-ready merely because ChatGPT can give it the `worker` label. If Chief is blocked on metadata operations but knows the **approved** target values, Chief creates the repo Issue with `chief`, then writes:
+
+```text
+<!-- metadata-handoff:ISSUE-143-chief-001 -->
+METADATA BOOTSTRAP HANDOFF — ISSUE #143
+Role: worker; scope: METADATA ONLY; IMPLEMENTATION NOT AUTHORIZED
+Selected Project: https://github.com/users/OWNER/projects/7
+Priority: P2 Medium (Chief decision); Project status during bootstrap: Backlog
+Milestone: existing #3 "M1"; DO NOT CREATE an unapproved milestone
+Dependencies: #139 blocks #143 (add native relationship); assignee: NOT REQUIRED
+Current evidence: Project membership/Status/Priority NOT VERIFIED (ChatGPT API 403)
+To do: add/check Project membership, set/read Backlog + P2, assign milestone #3,
+set/check native dependency #139, return each field's read-back evidence.
+After evidence: worker -> chief; remove metadata-bootstrap; release claim.
+Chief then performs the separate DoR and normal implementation handoff.
+```
+
+Chief updates issue labels to `worker` + `metadata-bootstrap` **only** and reads them back. This is the **only** exception to requiring Project membership for a Worker *metadata task*. A **separately owner-invoked** Worker may receive the issue number directly or, in explicitly requested bootstrap queue mode, search the repository for both labels. Ordinary implementation queues must exclude `metadata-bootstrap` issues.
+
+Worker confirms there is no conflicting claim, posts/reads back START, performs **only** the authorized metadata writes, and records:
+
+```text
+<!-- metadata-verified:ISSUE-143-worker-001 -->
+METADATA VERIFIED — ISSUE #143
+Project: <exact item API/URL>; Status: Backlog (read back); Priority: P2 (read back)
+Milestone: #3 "M1" (read back); blocked-by: #139 (read back)
+NOT VERIFIED: none / <specific field + reason>
+Next: remove metadata-bootstrap, change worker -> chief, read back, release claim.
+No implementation work has begun. No Project Ready was asserted.
+```
+
+For **METADATA BLOCKED**, include the exact API error, unresolved fields, and next owner; return `chief`, remove the bootstrap flag, release claim, and stop. Missing metadata never silently authorizes code or a PR. If milestone creation is required, Chief supplies exact approved title/scope or escalates to owner; Worker never guesses.
+
+Only after Chief independently certifies the full Definition of Ready and reads back `worker` + Project `Ready` does the normal implementation sequence in examples A–D apply.
 
 ## A. Chief creates a new implementation issue
 
