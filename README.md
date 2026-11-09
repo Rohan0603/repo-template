@@ -6,7 +6,13 @@ Copy the single root `AGENTS.md` (full policy and standard auto-discovery filena
 
 The human owner **manually invokes or schedules** AI sessions in Codex, OpenCode, ChatGPT Work, custom orchestrators, or other tools. Each session queries the live GitHub Project and issues, applies advisory issue claims, performs the designated role and writes evidence/handoffs back. **GitHub never launches AI agents.**
 
-The default routing is **chief** (research/architecture/decisions/review) or **worker** (implementation) as mutually exclusive labels; **human** is a Chief-managed extra flag for human-only gates. Every actionable issue must live in the correct Project and have one primary role. Labels never launch agents, and no central dispatcher or external runner service is needed. A scheduled agent session independently discovers its eligible issues through the GitHub Project.
+The default routing is **chief** (research/architecture/decisions/review) or **worker** (implementation) as mutually exclusive labels; **human** is a Chief-managed extra flag for human-only gates. **metadata-bootstrap** is an extra `worker`-only flag for a strictly limited GitHub metadata setup phase when ChatGPT Chat mode cannot assign the Project, milestone or native dependencies. Every implementation-ready issue must have verified membership in the correct Project and one primary role. Labels never launch agents, and no central dispatcher or external runner service is needed. A scheduled agent session independently discovers its eligible issues through the GitHub Project.
+
+## First-handoff metadata setup
+
+On the **first Chief → Worker handoff** for each new issue, Chief records a `GITHUB METADATA SETUP` checklist: canonical Project, Status, Chief-approved Priority, milestone (or `NOT REQUIRED`), native dependencies/sub-issues, assignee and any other required metadata. Verified values are distinguished from missing API operations. If Chief cannot complete a required operation, an owner-invoked Worker may receive `worker + metadata-bootstrap` to perform **metadata only**, read it back, and return the issue to Chief. **No implementation starts** until Chief subsequently certifies the full Definition of Ready and reads back Project `Ready` with the normal `worker` label. The human still explicitly invokes each agent; changing a label never starts one.
+
+See `AGENTS.md` §4, `docs/WORKFLOW_EXAMPLES.md` §0 and `docs/SETUP_GITHUB_PROJECTS.md` for the exact fail-closed protocol and permissions guidance.
 
 ## Files
 
@@ -38,6 +44,6 @@ pwsh -File scripts/bootstrap_github.ps1 -Repo OWNER/REPO
 pwsh -File scripts/bootstrap_github.ps1 -Repo OWNER/REPO -Execute
 ```
 
-The bootstrap script creates `chief`, `worker`, `human` labels and opts into Discussions and squash-only merges with merged-branch cleanup. These **repository settings are not copied** from the template into new repositories. Its dry-run mode is the default; it does not delete repositories or alter access controls.
+The bootstrap script creates `chief`, `worker`, `human`, `metadata-bootstrap` labels and opts into Discussions and squash-only merges with merged-branch cleanup. These **repository settings are not copied** from the template into new repositories. Its dry-run mode is the default; it does not delete repositories or alter access controls.
 
 Complete the GitHub Projects v2 creation, Status options/views, auto-add/backfill, required checks, and default-branch protection in `docs/SETUP_GITHUB_PROJECTS.md`. Private-repository protections may require an eligible plan. Never represent an unconfigured Project or unenforced branch rule as active.
