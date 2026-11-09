@@ -69,19 +69,30 @@ Chief then performs the separate DoR and normal implementation handoff.
 
 Chief updates issue labels to `worker` + `metadata-bootstrap` **only** and reads them back. This is the **only** exception to requiring Project membership for a Worker *metadata task*. A **separately owner-invoked** Worker may receive the issue number directly or, in explicitly requested bootstrap queue mode, search the repository for both labels. Ordinary implementation queues must exclude `metadata-bootstrap` issues.
 
-Worker confirms there is no conflicting claim, posts/reads back START, performs **only** the authorized metadata writes, and records:
+Worker confirms there is no conflicting claim, posts/reads back START, performs **only** the authorized metadata writes and reads them back. The successful handback has **separate ordered steps**, not one prematurely optimistic comment:
+
+```text
+<!-- metadata-prepared:ISSUE-143-worker-001 -->
+METADATA HANDOFF PREPARED — ISSUE #143
+Project: <exact item API/URL>; Status: Backlog (read back); Priority: P2 (read back)
+Milestone: #3 "M1" (read back); blocked-by: #139 (read back)
+Outstanding/NOT VERIFIED: none / <each exact blocked or unknown field>
+Next: update complete labels to chief, remove metadata-bootstrap, read back labels.
+IMPLEMENTATION NOT AUTHORIZED; this comment is NOT a completed handback.
+```
+
+After posting and reading back `METADATA HANDOFF PREPARED`, Worker performs the **one full-label mutation** from `worker + metadata-bootstrap` to `chief`, preserving unrelated classification labels. Worker reads back the entire label set and verifies the primary role is exactly `chief` and the bootstrap flag absent. **Only then** may it post/read back:
 
 ```text
 <!-- metadata-verified:ISSUE-143-worker-001 -->
 METADATA VERIFIED — ISSUE #143
-Project: <exact item API/URL>; Status: Backlog (read back); Priority: P2 (read back)
-Milestone: #3 "M1" (read back); blocked-by: #139 (read back)
-NOT VERIFIED: none / <specific field + reason>
-Next: remove metadata-bootstrap, change worker -> chief, read back, release claim.
-No implementation work has begun. No Project Ready was asserted.
+Prepared evidence: <exact prepared-comment URL and verified values>
+Handback labels: chief only (actual read-back URL/result)
+Outstanding/NOT VERIFIED: none; Project Ready was NOT asserted.
+No product implementation performed.
 ```
 
-For **METADATA BLOCKED**, include the exact API error, unresolved fields, and next owner; return `chief`, remove the bootstrap flag, release claim, and stop. Missing metadata never silently authorizes code or a PR. If milestone creation is required, Chief supplies exact approved title/scope or escalates to owner; Worker never guesses.
+If any field is missing despite successful label handback, post/read `METADATA BLOCKED` instead with the exact unresolved values. After a verified final comment, post/read the matching `CLAIM RELEASED` marker. Missing metadata never silently authorizes code or a PR. If milestone creation is required, Chief supplies exact approved title/scope or escalates to owner; Worker never guesses.
 
 ### Bootstrap reconciliation after competing or interrupted work
 
@@ -89,7 +100,7 @@ Claims are advisory, not locks. If two Workers have active or ambiguous claims, 
 
 For every Project mutation, record the handoff ID and read back the complete item list and the specific field after the write. If an add or field update times out, returns an incomplete response, or is interrupted, do not repeat it blindly: re-query first, detect whether the item/field already exists, and retry only the missing operation. More than one matching Project item is a duplicate-assignment blocker; stop and escalate instead of selecting one. Record successful fields separately from unresolved fields.
 
-If the `worker` → `chief` label change, bootstrap-label removal, handback comment, or read-back fails, do not publish `METADATA VERIFIED` or release the claim as complete. Post a reconciliation marker with the exact successful and failed writes, leave the issue with Chief, and require a fresh read before compensation. The offline validator can flag structural duplicates and invalid status/role combinations, but cannot prove claim exclusivity, API atomicity, retry safety or handback success; those remain **NOT VERIFIED** until live read-back.
+If the prepared comment, `worker` → `chief` label change, bootstrap-label removal, final handback comment, or any read-back fails, do not publish `METADATA VERIFIED` or claim completed release. Re-fetch the **actual** issue labels; post `RECONCILIATION REQUIRED` with exact successful, failed and unknown writes when safe, then stop and report to Chief/human. Never assert Chief ownership when `worker` remains. Require fresh verification before compensation. The offline validator can flag structural duplicates and invalid status/role combinations, but cannot prove claim exclusivity, API atomicity, retry safety or handback success; those remain **NOT VERIFIED** until live read-back.
 
 Only after Chief independently certifies the full Definition of Ready and reads back `worker` + Project `Ready` does the normal implementation sequence in examples A–D apply.
 
