@@ -46,6 +46,30 @@ def reconcile_metadata_bootstrap(*, active_claims: int, project_item_count: int,
     if not (handback_labels_read_back and handback_comment_read_back):
         findings.append("HANDBACK_NOT_VERIFIED")
     return findings
+def check_metadata_handback_order(events: list[str]) -> list[str]:
+    """Advisory offline check of ordered handback evidence, not proof of live writes.
+
+    Event names represent successful *read-backs*, never attempted operations.
+    A live Worker must independently verify each GitHub mutation and source.
+    """
+    required = (
+        "PREPARED_COMMENT_READBACK",
+        "CHIEF_LABEL_READBACK",
+        "FINAL_COMMENT_READBACK",
+        "CLAIM_RELEASED_READBACK",
+    )
+    observed = 0
+    findings = []
+    for event in events:
+        if observed < len(required) and event == required[observed]:
+            observed += 1
+        else:
+            findings.append("HANDBACK_OUT_OF_ORDER")
+    if observed != len(required):
+        findings.append("HANDBACK_INCOMPLETE")
+    return sorted(set(findings))
+
+
 GRAPHQL = """
 query($id:ID!, $after:String) {
   node(id:$id) {
