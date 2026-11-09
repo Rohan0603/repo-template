@@ -1,9 +1,10 @@
 """Regression tests for the license-free, integrity-verified CI scanner."""
-from pathlib import Path
+
 import unittest
+from pathlib import Path
 
-
-WORKFLOW = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "secret-scan.yml"
+ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW = ROOT / ".github" / "workflows" / "secret-scan.yml"
 
 
 class SecretScanWorkflowTests(unittest.TestCase):
